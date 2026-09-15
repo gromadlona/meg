@@ -1,17 +1,23 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
+import { LogoutButton } from "@/components/logout-button";
 
 export const metadata: Metadata = {
   title: { absolute: "Dashboard" },
   robots: { index: false, follow: false },
 };
 
-// TODO: tambahkan proteksi auth (middleware / check session + redirect ke /login).
-export default function PrivateLayout({
+export default async function PrivateLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) redirect("/login");
+
   return (
     <div className="flex min-h-screen">
       <aside className="hidden w-56 shrink-0 flex-col border-r border-border p-4 sm:flex">
@@ -35,8 +41,14 @@ export default function PrivateLayout({
             Settings
           </Link>
         </nav>
-        <div className="mt-auto font-mono text-xs text-muted-foreground">
-          (private) • noindex
+        <div className="mt-auto space-y-2">
+          <p className="truncate px-3 text-xs text-muted-foreground">
+            {session.user.email}
+          </p>
+          <LogoutButton />
+          <div className="font-mono text-xs text-muted-foreground">
+            (private) • noindex
+          </div>
         </div>
       </aside>
       <main className="flex-1 p-6 sm:p-10">{children}</main>

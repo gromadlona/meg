@@ -7,8 +7,9 @@
 ## 1. Identitas & Tujuan
 
 - **Nama:** meg — website portfolio + blog pribadi sederhana tapi rich.
-- **Status:** Fase 1, 2a, 2b, 3 selesai — base routes, landing wow full-width,
-  halaman publik rich, blog MDX + SEO. Sisa: Fase 4 (auth + DB), Fase 5 (deploy).
+- **Status:** Fase 1, 2a, 2b, 3, 4a selesai — base routes, landing wow full-width,
+  halaman publik rich, blog MDX + SEO, ORM Prisma v7 + auth Better Auth + proteksi
+  `(private)`. Sisa: Fase 4b (CRUD posts DB + CRUD users UI + email), Fase 5 (deploy).
 - **Target:** halaman publik super cepat & SEO-friendly (SSR/SSG Next.js),
   halaman auth terpisah, dashboard admin privat (noindex).
 - **Bahasa konten & `<html lang>`:** Indonesia (`id`).
@@ -24,7 +25,8 @@
 | UI        | shadcn `base-nova`, baseColor `neutral`, lucide icons, `@base-ui/react` | Komponen ditambah sebagai source via CLI, bukan dependency |
 | Font      | `Outfit` (sans/body), `Geist`, `Geist_Mono` | via `next/font/google`, CSS vars di root layout |
 | Util      | `cn` (`@/lib/utils` → re-export dari paket `cn`), `class-variance-authority` | Selalu pakai warna semantik (`bg-primary`, `text-muted-foreground`), jangan raw (`bg-blue-500`) |
-| Data (now)| MDX lokal (`src/content/blog/*.mdx`, frontmatter via `gray-matter`) | Nanti: CMS / DB + ISR |
+| Data (now)| MDX lokal (`src/content/blog/*.mdx`, frontmatter via `gray-matter`) + MySQL/MariaDB XAMPP via Prisma v7 (`prisma/schema.prisma`, client di `src/generated/prisma`) | Auth Better Auth 1.7 (email/password, `disableSignUp`, plugin `admin` untuk RBAC + CRUD user, `nextCookies` terakhir) |
+| Auth      | Better Auth `1.7.5` + `@better-auth/prisma-adapter` (`prismaAdapter(prisma, { provider: "mysql" })`) | Import server `better-auth`, client `better-auth/react` + `adminClient` dari `better-auth/client/plugins`, handler `better-auth/next-js`, cookie-check `better-auth/cookies` |
 
 Path alias: `@/*` → `./src/*` (lihat `tsconfig.json`).
 `components.json` aliases: `@/components`, `@/lib/utils`, `@/components/ui`, `@/lib`, `@/hooks`.
@@ -46,6 +48,9 @@ Env:
 
 ```bash
 NEXT_PUBLIC_SITE_URL=https://domain-asli.dev  # default fallback http://localhost:3000 (src/lib/site.ts)
+DATABASE_URL=mysql://root:@127.0.0.1:3306/meg # MySQL/MariaDB XAMPP lokal
+BETTER_AUTH_SECRET=<32+ chars base64>          # secret signing/session
+BETTER_AUTH_URL=http://localhost:3000          # base URL auth
 ```
 
 ## 4. Struktur Direktori
@@ -73,10 +78,10 @@ src/
       contact/page.tsx    # /contact
     (auth)/               # GRUP AUTH — layout centered, noindex
       layout.tsx
-      login/page.tsx      # /login (form disabled, robots noindex)
-      register/page.tsx   # /register (idem)
-    (private)/            # GRUP ADMIN — sidebar, noindex, BELUM diproteksi
-      layout.tsx          # TODO: cek session + redirect ke /login
+      login/page.tsx      # /login (LoginForm island + signIn.email, robots noindex)
+      register/page.tsx   # /register (nonaktif — akun dibuat admin, signup API 403)
+    (private)/            # GRUP ADMIN — sidebar, noindex, DIPROTEKSI
+      layout.tsx          # cek auth.api.getSession + redirect /login; tampil email + LogoutButton
       dashboard/page.tsx  # /dashboard — kartu statistik dummy
       dashboard/posts/page.tsx
       dashboard/settings/page.tsx
@@ -85,7 +90,9 @@ src/
     site-footer.tsx
     mobile-nav.tsx        # "use client" island: Sheet drawer kanan (lihat §10)
     table-of-contents.tsx # "use client" island: TOC scroll-spy artikel (baca h2/h3)
-    contact-form.tsx      # "use client" island: form kontak (submit SIMULASI, TODO Fase 4)
+    contact-form.tsx      # "use client" island: form kontak (submit SIMULASI, TODO backend email)
+    login-form.tsx        # "use client" island: signIn.email + redirect /dashboard
+    logout-button.tsx     # "use client" island: signOut + redirect /login
     landing/              # section homepage: hero.tsx, tech-marquee.tsx, feature-bento.tsx
     ui/                   # via CLI saja (§7): button, badge, card, separator, sheet,
                           # avatar, input, textarea, label,
@@ -97,9 +104,18 @@ src/
     mdx.ts                # kompilasi MDX via evaluate() + rehype (slug, pretty-code)
     projects.ts           # projects + experience + skillGroups (TODO: data asli)
     utils.ts              # re-export { cn }
+    prisma.ts             # singleton PrismaClient + PrismaMariaDb(DATABASE_URL)
+    auth.ts               # betterAuth: prismaAdapter mysql + emailAndPassword(disableSignUp) + admin + nextCookies
+    auth-client.ts        # "use client": createAuthClient(better-auth/react) + adminClient
   content/blog/*.mdx      # artikel: frontmatter (title/desc/date/tags) + markdown
   mdx-components.tsx      # komponen global MDX (link, h2/h3, tabel…; JANGAN override pre/code)
+  proxy.ts                # optimistic redirect /dashboard/* → /login bila cookie sesi tak ada (validasi penuh di layout)
+  generated/prisma/       # output Prisma Client (gitignored, regenerate via `prisma generate`)
 ```
+prisma/
+  schema.prisma           # generator prisma-client + datasource mysql + model User/Session/Account/Verification (via `auth generate`)
+  config.ts → lihat `prisma.config.ts` di root (datasource URL dari DATABASE_URL, seed config bila ada)
+  migrations/             # migrasi SQL (via `prisma migrate dev`)
 
 **Brand & aset (`public/`)** — favicon set + logo, dipisah per peran:
 - `public/favicon.ico` — di root agar auto-serve di `/favicon.ico` (fallback browser lawas).
@@ -160,20 +176,31 @@ plus OG image dinamis per slug (URL berhases, lihat tag `og:image`).
 
 ## 6. Skills & MCP Terdaftar
 
-`opencode.json` → 3 MCP (semua `enabled: true`):
-- `shadcn` — tambah/cari komponen. Registry aktif: `@shadcn` (471 items).
-  `components.json` punya `registries: {}` jadi **selalu pass eksplisit**
-  `registries: ["@shadcn"]` saat list/search.
+`opencode.json` → 4 MCP (semua `enabled: true`):
+- `shadcn` — tambah/cari komponen. Registry default: `@shadcn` (471 items).
+  `components.json` kini punya `registries: { "@magicui": ... }` jadi untuk
+  `@shadcn` **tetap pass eksplisit** `registries: ["@shadcn"]` saat list/search.
 - `next-devtools` — MCP dev server (port 3000, 9 tools): `get_routes`,
   `get_errors`, `get_page_metadata`, `compile_route`, `get_compilation_issues`, dsb.
   Wajib dipakai untuk verifikasi runtime, bukan sekadar `build` lolos.
 - `magicuidesign-mcp` — 250 items animasi/efek (beam, marquee, mockup, bento…).
   Dipakai di landing (marquee, bento, particles, meteors, …).
+- `better-auth` — remote `https://mcp.better-auth.com/mcp` — docs auth
+  (`search_docs` → `get_doc`). Resolve versi via `/llms.txt` bila user sebut versi
+  atau lockfile ada `better-auth`; fallback `latest`.
 
-`.agents/skills/` → 3 skills (`skills-lock.json` v1):
-- `shadcn` — prinsip: pakai komponen existing dulu, compose, variants bawaan, warna semantik.
-- `next-dev-loop` — loop verifikasi: ubah → cek `/_next/mcp` → cek browser → konfirmasi.
-- `migrate-radix-to-base` — migrasi komponen Radix lama ke Base UI (repo sudah Base UI).
+`.agents/skills/` → 18 skills (`skills-lock.json` v1):
+- UI: `shadcn` (pakai existing dulu, compose, variants, warna semantik),
+  `migrate-radix-to-base` (repo sudah Base UI).
+- Next: `next-dev-loop` (ubah → cek `/_next/mcp` → cek browser → konfirmasi).
+- Auth (6): `create-auth` (scaffold auth — wajib planning scan + tanya user dulu),
+  `better-auth-best-practices`, `better-auth-security-best-practices`,
+  `email-and-password-best-practices`, `organization-best-practices`,
+  `two-factor-authentication-best-practices`.
+- Prisma (9): `prisma-cli`, `prisma-client-api`, `prisma-compute`,
+  `prisma-database-setup`, `prisma-driver-adapter-implementation`,
+  `prisma-mongodb-upgrade`, `prisma-postgres`, `prisma-postgres-setup`,
+  `prisma-upgrade-v7`.
 
 `list_mcp_resources` kosong = normal (MCP ini expose tools, bukan resources).
 
@@ -257,12 +284,21 @@ npx shadcn@latest add owner/repo/item         # dari registry pihak ketiga lain
   (**JANGAN** `@next/mdx` loader — Turbopack menolak opsi fungsi; mode string
   gagal resolve; lihat `next.config.ts`). URL OG riil berhases
   (`/blog/:slug/opengraph-image-<hash>?…`), diambil dari tag `og:image`.
-- [ ] Fase 4 — auth beneran + proteksi `(private)` (middleware/session) + CRUD posts + DB.
+- [x] Fase 4a — ORM + auth: Prisma v7 MySQL XAMPP (`meg`), Better Auth 1.7
+  email/password + `disableSignUp`, plugin `admin` (RBAC `admin`/`user`, CRUD user
+  via `auth.api`/`authClient.admin`), proteksi `(private)` (proxy optimistic +
+  `getSession` di layout + redirect `/login`), seeder admin
+  `admin@mail.com` / `admin123` via `auth create-admin`. Verifikasi: build lolos,
+  `GET /api/auth/ok` → `{ok:true}`, signup → 400 `EMAIL_PASSWORD_SIGN_UP_DISABLED`,
+  signin admin → 200 + cookie, `/dashboard` tanpa sesi → 307 `/login`.
+- [ ] Fase 4b — CRUD posts DB + CRUD users UI di dashboard + email beneran (reset/verifikasi).
 - [ ] Fase 5 — i18n?, analytics, web vitals, deploy (Vercel / self-host).
 
 ## 10. Yang BELUM Ada (jangan diasumsikan ada)
 
-- Auth/session, middleware, DB, CMS, upload, search, komentar, analytics.
+- CMS, upload, search, komentar, analytics. Auth/session + proxy + DB MySQL/Prisma
+  SUDAH ada (Fase 4a) — jangan pasang ulang.
+- CRUD users UI di dashboard + CRUD posts DB + email beneran (reset/verifikasi).
 - `src/components/ui/*` terisi via CLI (jangan buat manual): `@shadcn` → button,
   badge, card, separator, sheet, avatar, input, textarea, label; `@magicui` →
   bento-grid, marquee, animated-gradient-text, number-ticker,
