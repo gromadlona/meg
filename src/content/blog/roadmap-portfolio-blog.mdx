@@ -1,0 +1,39 @@
+---
+title: "Roadmap: Dari Placeholder ke Portfolio yang Indah"
+description: "Rencana bertahap membangun portfolio + blog rich tapi tetap sederhana."
+date: "2026-09-10"
+tags: ["roadmap", "portfolio"]
+---
+
+Website ini dibangun bertahap. Setiap fase selesai dalam keadaan **bisa di-build dan bisa dibuka** — tidak ada fase "nanti disambung".
+
+## Fase yang sudah lewat
+
+### Fase 1 — Fondasi
+
+Base routes `(public)/(auth)/(private)`, data dummy, SEO fondasi (`metadataBase`, sitemap, robots, JSON-LD).
+
+### Fase 2 — Wajah
+
+Landing full-width dengan hero h-screen, particles 3 layer warna brand, marquee stack, bento grid, dan CTA panel gelap bermeteors. Komponen **wajib via CLI** (`npx shadcn@latest add ...`), tanpa copy-paste manual:
+
+```bash
+npx shadcn@latest add -y @shadcn/button @shadcn/card @shadcn/badge
+npx shadcn@latest add -y @magicui/particles @magicui/meteors
+```
+
+## Fase berjalan: blog rich
+
+Fase ini mengubah artikel dari string dummy menjadi **file MDX asli** dengan:
+
+- Frontmatter (`gray-matter`) untuk title, description, date, tags.
+- Code highlight Shiki (`rehype-pretty-code`, tema light + dark).
+- Heading anchors (`rehype-slug`) + TOC scroll-spy.
+- OG image dinamis per slug + RSS feed.
+
+## Yang akan datang
+
+1. **Fase 4 — Auth & dashboard** — login beneran, proteksi `(private)`, tulis post dari admin, database.
+2. **Fase 5 — Go live** — audit PageSpeed, final SEO, deploy.
+
+> Prinsipnya: tiap fase menutup satu janji ke pembaca. Fase ini janjinya — *blog yang enak dibaca dan enak di-share*.

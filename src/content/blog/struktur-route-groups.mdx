@@ -1,0 +1,44 @@
+---
+title: "Merancang Route Groups: (public), (auth), (private)"
+description: "Cara memisahkan halaman publik, auth, dan dashboard tanpa memengaruhi URL."
+date: "2026-09-05"
+tags: ["nextjs", "routing", "arsitektur"]
+---
+
+Route Groups memakai folder `(nama)` — tidak masuk ke URL. Jadi `app/(public)/blog/page.tsx` tetap diakses via `/blog`, sementara layout-nya bisa beda total dengan grup lain.
+
+## Struktur yang dipakai website ini
+
+```text
+src/app/
+  layout.tsx              # root: <html lang="id"> + SEO base
+  (public)/               # header + footer, full-width
+    page.tsx              # /
+    blog/page.tsx         # /blog
+    blog/[slug]/page.tsx  # /blog/:slug
+  (auth)/                 # layout centered, noindex
+    login/page.tsx        # /login
+  (private)/              # sidebar admin, noindex
+    dashboard/page.tsx    # /dashboard
+```
+
+## Keuntungannya
+
+1. **Layout per konteks** — publik pakai header/footer SEO, auth pakai layout centered, dashboard pakai sidebar. Tanpa grup, semua halaman terpaksa berbagi satu layout.
+2. **Batas SEO jelas** — grup `(auth)` dan `(private)` di-set `noindex` + di-disallow di `robots.ts`, grup `(public)` masuk `sitemap.xml`.
+3. **Skala tim** — tiap grup bisa dimiliki tim berbeda tanpa konflik URL.
+
+## Aturan penting
+
+Jangan sampai dua grup me-resolve ke path yang sama. Contoh yang **error**:
+
+```text
+(public)/about/page.tsx   → /about
+(private)/about/page.tsx  → /about  ✗ konflik!
+```
+
+Next.js akan menolak build dengan pesan rute konflik. Solusinya: pastikan setiap URL hanya dimiliki satu grup.
+
+## Kapan tidak butuh grup?
+
+Kalau websitemu satu jenis halaman saja (misalnya semua publik), grup hanya menambah nesting tanpa manfaat. Grup bersinar saat ada **konteks layout berbeda** — persis kasus portfolio + auth + admin seperti di sini.

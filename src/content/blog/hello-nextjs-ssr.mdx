@@ -1,0 +1,49 @@
+---
+title: "Halo Next.js: Kenapa SSR Penting untuk Blog"
+description: "Alasan kenapa halaman blog publik harus server-rendered: kecepatan, SEO, dan shareability."
+date: "2026-09-01"
+tags: ["nextjs", "ssr", "seo"]
+---
+
+Blog ini dirender di server. Artinya HTML sudah jadi saat Googlebot atau pembaca membuka halaman — cepat dibuka, mudah di-index, dan enak di-share ke media sosial.
+
+## Pola yang dipakai
+
+Setiap artikel adalah **Server Component async** yang membaca file MDX lokal, plus tiga API Next.js:
+
+```tsx
+// app/blog/[slug]/page.tsx
+export async function generateStaticParams() {
+  return getAllSlugs().map((slug) => ({ slug }));
+}
+
+export async function generateMetadata({ params }: Props) {
+  const { slug } = await params;
+  const post = await getPostBySlug(slug);
+  return { title: post?.title, description: post?.description };
+}
+
+export default async function BlogDetailPage({ params }: Props) {
+  const { slug } = await params;
+  const { default: Content } = await import(`@/content/blog/${slug}.mdx`);
+  return <Content />;
+}
+```
+
+Perhatikan: di Next.js 16, `params` adalah `Promise` — wajib `await`.
+
+## Kenapa bukan CSR murni?
+
+| Aspek | SSR/SSG | CSR murni |
+| ----- | ------- | --------- |
+| HTML saat crawl | Sudah jadi | Kosong, nunggu JS |
+| First paint | Cepat | Lambat di HP kentang |
+| Preview share | Og:image + teks akurat | Sering gagal |
+
+> Kalau kontenmu dibaca manusia **dan** mesin (Google, bot sosmed), render di server. Titik.
+
+## Langkah berikutnya
+
+- Sambungkan ke CMS atau koleksi Markdown yang lebih besar.
+- Tambahkan revalidasi ISR agar artikel baru terbit tanpa rebuild penuh.
+- Pasang `opengraph-image.tsx` dinamis per slug — sudah dikerjakan di Fase 3 blog ini.
