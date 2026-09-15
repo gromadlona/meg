@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Clock, Mail, MapPin } from "lucide-react";
-import { ContactForm } from "@/components/contact-form";
+import { ContactForm } from "@/components/site/contact-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const metadata: Metadata = {

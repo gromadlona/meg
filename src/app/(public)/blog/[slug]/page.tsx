@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { TableOfContents } from "@/components/table-of-contents";
+import { TableOfContents } from "@/components/blog/table-of-contents";
 import { Badge } from "@/components/ui/badge";
 import { getMdxContent } from "@/lib/mdx";
 import { getAllSlugs, getPostBySlug } from "@/lib/posts";

@@ -1,10 +1,19 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm } from "react-hook-form";
 import * as z from "zod";
-import { authClient } from "@/lib/auth-client";
+import {
+  banUserAction,
+  removeUserAction,
+  setPasswordAction,
+  setRoleAction,
+  unbanUserAction,
+  type ActionResult,
+} from "@/components/dashboard/users/actions";
+import { toast } from "@/components/ui/toast";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,7 +50,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import type { AdminUser } from "@/components/users-manager";
+import type { AdminUser } from "@/components/dashboard/users/types";
 import { KeyRoundIcon, ShieldCheckIcon, Trash2Icon, BanIcon } from "lucide-react";
 
 const roleSchema = z.object({ role: z.enum(["admin", "user"]) });
@@ -66,15 +75,11 @@ function ActionButton({
 export function UserRowActions({
   user,
   isSelf,
-  onAction,
 }: {
   user: AdminUser;
   isSelf: boolean;
-  onAction: (
-    label: string,
-    fn: () => Promise<{ error: unknown } | unknown>,
-  ) => Promise<void>;
 }) {
+  const router = useRouter();
   const [pending, setPending] = React.useState<string | null>(null);
   const [roleOpen, setRoleOpen] = React.useState(false);
   const [passwordOpen, setPasswordOpen] = React.useState(false);
@@ -93,10 +98,25 @@ export function UserRowActions({
     defaultValues: { banReason: "" },
   });
 
-  async function run(label: string, key: string, fn: () => Promise<unknown>) {
+  async function run(
+    label: string,
+    key: string,
+    fn: () => Promise<ActionResult>,
+  ): Promise<boolean> {
     setPending(key);
     try {
-      await onAction(label, fn);
+      const result = await fn();
+      if (!result.ok) {
+        toast.add({
+          type: "error",
+          title: `${label} gagal`,
+          description: result.message,
+        });
+        return false;
+      }
+      toast.add({ type: "success", title: `${label} berhasil` });
+      router.refresh();
+      return true;
     } finally {
       setPending(null);
     }
@@ -127,10 +147,10 @@ export function UserRowActions({
           <form
             id={`role-form-${user.id}`}
             onSubmit={roleForm.handleSubmit(async (values) => {
-              await run("Ubah role", "role", () =>
-                authClient.admin.setRole({ userId: user.id, role: values.role }),
+              const ok = await run("Ubah role", "role", () =>
+                setRoleAction(user.id, values.role),
               );
-              setRoleOpen(false);
+              if (ok) setRoleOpen(false);
             })}
             noValidate
           >
@@ -206,14 +226,13 @@ export function UserRowActions({
           <form
             id={`password-form-${user.id}`}
             onSubmit={passwordForm.handleSubmit(async (values) => {
-              await run("Reset password", "password", () =>
-                authClient.admin.setUserPassword({
-                  userId: user.id,
-                  newPassword: values.newPassword,
-                }),
+              const ok = await run("Reset password", "password", () =>
+                setPasswordAction(user.id, values.newPassword),
               );
-              passwordForm.reset();
-              setPasswordOpen(false);
+              if (ok) {
+                passwordForm.reset();
+                setPasswordOpen(false);
+              }
             })}
             noValidate
           >
@@ -267,9 +286,7 @@ export function UserRowActions({
           disabled={busy}
           title="Unban pengguna"
           onClick={() =>
-            run("Unban pengguna", "ban", () =>
-              authClient.admin.unbanUser({ userId: user.id }),
-            )
+            run("Unban pengguna", "ban", () => unbanUserAction(user.id))
           }
         >
           {pending === "ban" ? (
@@ -301,14 +318,13 @@ export function UserRowActions({
             <form
               id={`ban-form-${user.id}`}
               onSubmit={banForm.handleSubmit(async (values) => {
-                await run("Ban pengguna", "ban", () =>
-                  authClient.admin.banUser({
-                    userId: user.id,
-                    banReason: values.banReason || undefined,
-                  }),
+                const ok = await run("Ban pengguna", "ban", () =>
+                  banUserAction(user.id, values.banReason),
                 );
-                banForm.reset();
-                setBanOpen(false);
+                if (ok) {
+                  banForm.reset();
+                  setBanOpen(false);
+                }
               })}
               noValidate
             >
@@ -384,7 +400,7 @@ export function UserRowActions({
               disabled={busy}
               onClick={() =>
                 run("Hapus pengguna", "remove", () =>
-                  authClient.admin.removeUser({ userId: user.id }),
+                  removeUserAction(user.id),
                 )
               }
             >

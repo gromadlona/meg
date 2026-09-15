@@ -3,8 +3,8 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
-import { AdminHeader } from "@/components/admin-header";
-import { AppSidebar } from "@/components/app-sidebar";
+import { AdminHeader } from "@/components/dashboard/admin-header";
+import { AppSidebar } from "@/components/dashboard/app-sidebar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/toast";
 

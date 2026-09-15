@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { siteConfig } from "@/lib/site";
-import { MobileNav } from "@/components/mobile-nav";
+import { MobileNav } from "@/components/site/mobile-nav";
 
 export function SiteHeader() {
   return (

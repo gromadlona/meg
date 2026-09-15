@@ -86,23 +86,27 @@ src/
       layout.tsx          # getSession + redirect /login; SidebarProvider (defaultOpen dari cookie sidebar_state) + AppSidebar + SidebarInset + AdminHeader
       dashboard/page.tsx  # /dashboard — kartu statistik dummy
       dashboard/posts/page.tsx
-      dashboard/users/page.tsx  # /dashboard/users — admin-only (role check + redirect); render UsersManager
+      dashboard/users/page.tsx  # /dashboard/users — admin-only (role check + redirect); SC baca
+                                # searchParams ?q= + auth.api.listUsers, render UsersSearch (island)
+                                # + UserFormDialog + UsersTable; mutasi via actions.ts
       dashboard/settings/page.tsx
   components/
-    site-header.tsx       # nav publik (baca siteConfig.nav) + slot MobileNav
-    site-footer.tsx
-    mobile-nav.tsx        # "use client" island: Sheet drawer kanan (lihat §10)
-    table-of-contents.tsx # "use client" island: TOC scroll-spy artikel (baca h2/h3)
-    contact-form.tsx      # "use client" island: form kontak (submit SIMULASI, TODO backend email)
-    login-form.tsx        # "use client" island: signIn.email + redirect /dashboard
-    admin-header.tsx      # "use client" island: SidebarTrigger + Separator + Breadcrumb dinamis per route
-    app-sidebar.tsx       # "use client": Sidebar inset MeGGi.dev + NavMain + NavSecondary + NavUser(session)
-    nav-main.tsx          # "use client": grup Admin flat (Overview/Posts/Pengguna/Pengaturan), active via usePathname, tanpa Collapsible
-    nav-secondary.tsx     # "use client": grup Situs (Lihat Situs/Blog)
-    nav-user.tsx          # "use client": kartu user footer (Avatar + nama/email + Badge role + Button Keluar destructive + spinner), tanpa DropdownMenu
-    users-manager.tsx     # "use client": tabel users admin (search debounce + listUsers + toast + Empty/Skeleton/Alert), panggil UserFormDialog + UserRowActions
-    user-form-dialog.tsx  # "use client": Dialog tambah user (RHF + zodResolver + Field/Select role user|admin → admin.createUser + toast)
-    user-row-actions.tsx  # "use client": Dialog ubah role / reset password / ban (+unban) + AlertDialog hapus (RHF + Zod tiap form → admin.* + toast)
+    site/               # SERVER + island publik: site-header.tsx (SC), site-footer.tsx (SC),
+                        # mobile-nav.tsx ("use client": Sheet drawer + usePathname),
+                        # contact-form.tsx ("use client": form simulasi)
+    auth/               # login-form.tsx ("use client" island: signIn.email + redirect /dashboard)
+    blog/               # table-of-contents.tsx ("use client" island: TOC scroll-spy h2/h3)
+    dashboard/          # SERVER + island privat: app-sidebar.tsx (SC, komposisi),
+                        # sidebar-brand.tsx (SC logo), nav-main.tsx + nav-secondary.tsx
+                        # ("use client" mandiri: item+ikon internal, active via usePathname),
+                        # nav-user.tsx ("use client": kartu user + signOut),
+                        # admin-header.tsx (SC: trigger + separator) +
+                        # admin-breadcrumb.tsx ("use client": judul via usePathname)
+      users/            # CRUD pengguna server-first: types.ts, actions.ts ("use server":
+                        # create/set-role/set-password/ban/unban/remove via auth.api +
+                        # revalidatePath), users-table.tsx (SC tabel), users-search.tsx
+                        # ("use client": debounce → ?q=), user-form-dialog.tsx +
+                        # user-row-actions.tsx ("use client": RHF + panggil actions + toast)
     landing/              # section homepage: hero.tsx, tech-marquee.tsx, feature-bento.tsx
     ui/                   # via CLI saja (§7): button, badge, card, separator, sheet,
                           # avatar, input, textarea, label, breadcrumb, collapsible,
@@ -315,12 +319,17 @@ npx shadcn@latest add owner/repo/item         # dari registry pihak ketiga lain
   Verifikasi: build lolos, ESLint bersih, anon `/login` 200, authed `/login` dan
   `/register` 307 `/dashboard`.
 - [x] Fase 4b.1 — CRUD users UI di `/dashboard/users` (admin-only, proteksi ganda:
-  proxy cookie + `role !== "admin"` redirect di page): tabel + search debounce +
-  Dialog tambah user + Dialog ubah role/reset password/ban + AlertDialog hapus +
-  unban direct, semua via `authClient.admin.*` + RHF/`zodResolver` + `toast`.
-  Nav sidebar + breadcrumb + `<Toaster/>` ditambah. Verifikasi: build lolos,
-  ESLint bersih, list/create/set-role/ban/unban/remove 200, non-admin 307
-  `/dashboard`.
+  proxy cookie + `role !== "admin"` redirect di page): tabel SSR via
+  `auth.api.listUsers` + search `?q=` (island `UsersSearch` debounce →
+  `router.replace`) + Dialog tambah user + Dialog ubah role/reset password/ban +
+  AlertDialog hapus + unban direct, mutasi via Server Actions (`actions.ts`:
+  `auth.api.*` + cek admin di server + `revalidatePath`), dialogs tetap client
+  (RHF/`zodResolver` + `toast` + `router.refresh`). Sidebar/header dipecah
+  server-first: `AppSidebar`/`AdminHeader`/`SidebarBrand` SC, islands hanya
+  `NavMain`/`NavSecondary`/`NavUser`/`AdminBreadcrumb`. Komponen difoldering:
+  `site/`, `auth/`, `blog/`, `dashboard/` (+ `users/`), `landing/`, `ui/` tetap.
+  Verifikasi: build lolos, ESLint tanpa error baru, `/login` anon 200,
+  `/dashboard/users` anon 307 `/login`.
 - [ ] Fase 4b.2 — CRUD posts DB + email beneran (reset/verifikasi).
 - [ ] Fase 5 — i18n?, analytics, web vitals, deploy (Vercel / self-host).
 
@@ -340,13 +349,15 @@ npx shadcn@latest add owner/repo/item         # dari registry pihak ketiga lain
   dari kanan, active-state via `usePathname`). Desktop nav `hidden md:flex`,
   tombol hamburger `md:hidden`. Jangan jadikan seluruh header client.
 - Navigasi admin: pola docs sidebar resmi — `SidebarProvider` + `AppSidebar`
-  (`variant="inset"` sidebar-08, disederhanakan TANPA Collapsible/DropdownMenu) +
-  `SidebarInset` + `AdminHeader` (trigger + breadcrumb). Menu flat: grup Admin
-  (Overview/Posts/Pengguna/Pengaturan) + grup Situs + kartu user footer (Avatar + Badge
-  role + Button Keluar + spinner pending). Active-state via `usePathname` + prop `isActive`; persistence via cookie
-  `sidebar_state` (dibaca di layout → `defaultOpen`). File registry
-  tidak dioprek (`collapsible.tsx`/`dropdown-menu.tsx` tetap ada tapi tak dipakai
-  nav); adaptasi hanya di `app-sidebar/nav-*/admin-header` + hapus demo
-  `nav-projects`.
+  (SC komposisi, `variant="inset"` sidebar-08, TANPA Collapsible/DropdownMenu) +
+  `SidebarInset` + `AdminHeader` (SC: trigger + separator + island
+  `AdminBreadcrumb`). Menu flat mandiri di island: `NavMain` (Overview/Posts/
+  Pengguna/Pengaturan) + `NavSecondary` (Situs) — item + ikon di dalam island
+  (tanpa props ReactNode lintas server→client), active-state via `usePathname`;
+  kartu user footer `NavUser` (Avatar + Badge role + Button Keluar + spinner
+  pending, prop user serializable dari layout). `SidebarBrand` (logo) SC.
+  Persistence via cookie `sidebar_state` (dibaca di layout → `defaultOpen`).
+  File registry tidak dioprek (`collapsible.tsx`/`dropdown-menu.tsx` tetap ada
+  tapi tak dipakai nav). Semua file admin di `components/dashboard/`.
 - `next.config.ts` polos (MDX dikompilasi saat render, lihat `src/lib/mdx.ts`).
   `sitemap.ts` memakai tanggal frontmatter asli.

@@ -1,10 +1,11 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm } from "react-hook-form";
 import * as z from "zod";
-import { authClient } from "@/lib/auth-client";
+import { createUserAction } from "@/components/dashboard/users/actions";
 import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,13 +43,8 @@ const userSchema = z.object({
 
 type UserFormValues = z.infer<typeof userSchema>;
 
-export function UserFormDialog({
-  trigger,
-  onSaved,
-}: {
-  trigger: React.ReactElement;
-  onSaved: () => Promise<void> | void;
-}) {
+export function UserFormDialog({ trigger }: { trigger: React.ReactElement }) {
+  const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userSchema),
@@ -57,24 +53,22 @@ export function UserFormDialog({
   const { isSubmitting } = form.formState;
 
   async function onSubmit(values: UserFormValues) {
-    const { error } = await authClient.admin.createUser({
-      name: values.name,
-      email: values.email,
-      password: values.password,
-      role: values.role,
-    });
-    if (error) {
+    const result = await createUserAction(values);
+    if (!result.ok) {
       toast.add({
         type: "error",
         title: "Gagal menambah pengguna",
-        description: error.message ?? "Terjadi kesalahan.",
+        description:
+          result.message === "Hanya admin yang boleh."
+            ? "Sesi bukan admin."
+            : "Terjadi kesalahan.",
       });
       return;
     }
     toast.add({ type: "success", title: "Pengguna ditambah" });
     form.reset();
     setOpen(false);
-    await onSaved();
+    router.refresh();
   }
 
   return (
