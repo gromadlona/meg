@@ -7,9 +7,10 @@
 ## 1. Identitas & Tujuan
 
 - **Nama:** meg — website portfolio + blog pribadi sederhana tapi rich.
-- **Status:** Fase 1, 2a, 2b, 3, 4a selesai — base routes, landing wow full-width,
+- **Status:** Fase 1, 2a, 2b, 3, 4a, 4a.1, 4b.1 selesai — base routes, landing wow full-width,
   halaman publik rich, blog MDX + SEO, ORM Prisma v7 + auth Better Auth + proteksi
-  `(private)`. Sisa: Fase 4b (CRUD posts DB + CRUD users UI + email), Fase 5 (deploy).
+  `(private)` + sidebar-08 inset + guard login dua arah + CRUD users UI. Sisa:
+  Fase 4b.2 (CRUD posts DB + email), Fase 5 (deploy).
 - **Target:** halaman publik super cepat & SEO-friendly (SSR/SSG Next.js),
   halaman auth terpisah, dashboard admin privat (noindex).
 - **Bahasa konten & `<html lang>`:** Indonesia (`id`).
@@ -27,6 +28,7 @@
 | Util      | `cn` (`@/lib/utils` → re-export dari paket `cn`), `class-variance-authority` | Selalu pakai warna semantik (`bg-primary`, `text-muted-foreground`), jangan raw (`bg-blue-500`) |
 | Data (now)| MDX lokal (`src/content/blog/*.mdx`, frontmatter via `gray-matter`) + MySQL/MariaDB XAMPP via Prisma v7 (`prisma/schema.prisma`, client di `src/generated/prisma`) | Auth Better Auth 1.7 (email/password, `disableSignUp`, plugin `admin` untuk RBAC + CRUD user, `nextCookies` terakhir) |
 | Auth      | Better Auth `1.7.5` + `@better-auth/prisma-adapter` (`prismaAdapter(prisma, { provider: "mysql" })`) | Import server `better-auth`, client `better-auth/react` + `adminClient` dari `better-auth/client/plugins`, handler `better-auth/next-js`, cookie-check `better-auth/cookies` |
+| Form      | React Hook Form `7.88` + Zod `4.6` + `@hookform/resolvers@5.9.1` (pakai `zodResolver`, sesuai panduan `ui.shadcn.com/docs/forms/react-hook-form`) + `use-debounce@10.1.1` untuk search | Pola: `useForm` + `Controller` + `Field`/`FieldLabel`/`FieldError`/`FieldGroup`; `data-invalid` di `Field`, `aria-invalid` di kontrol; feedback via `toast` Base UI (`@/components/ui/toast` + `<Toaster/>` di private layout) |
 
 Path alias: `@/*` → `./src/*` (lihat `tsconfig.json`).
 `components.json` aliases: `@/components`, `@/lib/utils`, `@/components/ui`, `@/lib`, `@/hooks`.
@@ -78,12 +80,13 @@ src/
       contact/page.tsx    # /contact
     (auth)/               # GRUP AUTH — layout centered, noindex
       layout.tsx
-      login/page.tsx      # /login (LoginForm island + signIn.email, robots noindex)
+      login/page.tsx      # /login (getSession + redirect /dashboard bila sudah login, robots noindex)
       register/page.tsx   # /register (nonaktif — akun dibuat admin, signup API 403)
-    (private)/            # GRUP ADMIN — sidebar, noindex, DIPROTEKSI
-      layout.tsx          # cek auth.api.getSession + redirect /login; tampil email + LogoutButton
+    (private)/            # GRUP ADMIN — sidebar-08 inset, noindex, DIPROTEKSI
+      layout.tsx          # getSession + redirect /login; SidebarProvider (defaultOpen dari cookie sidebar_state) + AppSidebar + SidebarInset + AdminHeader
       dashboard/page.tsx  # /dashboard — kartu statistik dummy
       dashboard/posts/page.tsx
+      dashboard/users/page.tsx  # /dashboard/users — admin-only (role check + redirect); render UsersManager
       dashboard/settings/page.tsx
   components/
     site-header.tsx       # nav publik (baca siteConfig.nav) + slot MobileNav
@@ -92,12 +95,24 @@ src/
     table-of-contents.tsx # "use client" island: TOC scroll-spy artikel (baca h2/h3)
     contact-form.tsx      # "use client" island: form kontak (submit SIMULASI, TODO backend email)
     login-form.tsx        # "use client" island: signIn.email + redirect /dashboard
-    logout-button.tsx     # "use client" island: signOut + redirect /login
+    admin-header.tsx      # "use client" island: SidebarTrigger + Separator + Breadcrumb dinamis per route
+    app-sidebar.tsx       # "use client": Sidebar inset MeGGi.dev + NavMain + NavSecondary + NavUser(session)
+    nav-main.tsx          # "use client": grup Admin flat (Overview/Posts/Pengguna/Pengaturan), active via usePathname, tanpa Collapsible
+    nav-secondary.tsx     # "use client": grup Situs (Lihat Situs/Blog)
+    nav-user.tsx          # "use client": kartu user footer (Avatar + nama/email + Badge role + Button Keluar destructive + spinner), tanpa DropdownMenu
+    users-manager.tsx     # "use client": tabel users admin (search debounce + listUsers + toast + Empty/Skeleton/Alert), panggil UserFormDialog + UserRowActions
+    user-form-dialog.tsx  # "use client": Dialog tambah user (RHF + zodResolver + Field/Select role user|admin → admin.createUser + toast)
+    user-row-actions.tsx  # "use client": Dialog ubah role / reset password / ban (+unban) + AlertDialog hapus (RHF + Zod tiap form → admin.* + toast)
     landing/              # section homepage: hero.tsx, tech-marquee.tsx, feature-bento.tsx
     ui/                   # via CLI saja (§7): button, badge, card, separator, sheet,
-                          # avatar, input, textarea, label,
+                          # avatar, input, textarea, label, breadcrumb, collapsible,
+                          # dropdown-menu, sidebar, skeleton, tooltip, table, dialog,
+                          # alert-dialog, field, select, alert, spinner, empty, toast,
                           # bento-grid, marquee, animated-gradient-text, number-ticker,
                           # animated-grid-pattern, shimmer-button, particles, meteors
+                          # (`sonner.tsx` terpasang tapi TAK dipakai — proyek Base UI pakai `toast`)
+  hooks/
+    use-mobile.ts         # via CLI sidebar (breakpoint 768, dipakai SidebarProvider)
   lib/
     site.ts               # siteConfig: name, title, description, url, locale, nav
     posts.ts              # metadata posts dari frontmatter MDX (fs + gray-matter)
@@ -109,7 +124,7 @@ src/
     auth-client.ts        # "use client": createAuthClient(better-auth/react) + adminClient
   content/blog/*.mdx      # artikel: frontmatter (title/desc/date/tags) + markdown
   mdx-components.tsx      # komponen global MDX (link, h2/h3, tabel…; JANGAN override pre/code)
-  proxy.ts                # optimistic redirect /dashboard/* → /login bila cookie sesi tak ada (validasi penuh di layout)
+  proxy.ts                # optimistic redirect dua arah: /dashboard/* tanpa cookie → /login; /login|/register ber-cookie → /dashboard (validasi penuh di layout)
   generated/prisma/       # output Prisma Client (gitignored, regenerate via `prisma generate`)
 ```
 prisma/
@@ -133,10 +148,10 @@ prisma/
   `metadata.icons` + membayangi `public/favicon.ico`. Satu sumber kebenaran:
   `public/` + `metadata`.
 
-**15+ routes terdaftar** (cek via next-devtools `get_routes`):
+**16+ routes terdaftar** (cek via next-devtools `get_routes`):
 `/`, `/blog`, `/blog/[slug]` (×3 slug SSG), `/about`, `/projects`,
 `/contact`, `/login`, `/register`, `/dashboard`, `/dashboard/posts`,
-`/dashboard/settings`, `/robots.txt`, `/sitemap.xml`, `/rss`,
+`/dashboard/users`, `/dashboard/settings`, `/robots.txt`, `/sitemap.xml`, `/rss`,
 plus OG image dinamis per slug (URL berhases, lihat tag `og:image`).
 
 ## 5. Pola Wajib (jangan dilanggar)
@@ -291,21 +306,47 @@ npx shadcn@latest add owner/repo/item         # dari registry pihak ketiga lain
   `admin@mail.com` / `admin123` via `auth create-admin`. Verifikasi: build lolos,
   `GET /api/auth/ok` → `{ok:true}`, signup → 400 `EMAIL_PASSWORD_SIGN_UP_DISABLED`,
   signin admin → 200 + cookie, `/dashboard` tanpa sesi → 307 `/login`.
-- [ ] Fase 4b — CRUD posts DB + CRUD users UI di dashboard + email beneran (reset/verifikasi).
+- [x] Fase 4a.1 — sidebar admin sidebar-08 inset (via CLI `@shadcn/sidebar-08`,
+  file registry tak dioprek): `SidebarProvider` + `AppSidebar` + `SidebarInset` +
+  `AdminHeader` (trigger + breadcrumb dinamis), menu flat tanpa Collapsible/
+  DropdownMenu (grup Admin + Situs + kartu user footer Avatar + Badge role +
+  Button Keluar + spinner), active-state `usePathname`, persistence cookie
+  `sidebar_state`, guard login dua arah (proxy + `getSession` di `/login`).
+  Verifikasi: build lolos, ESLint bersih, anon `/login` 200, authed `/login` dan
+  `/register` 307 `/dashboard`.
+- [x] Fase 4b.1 — CRUD users UI di `/dashboard/users` (admin-only, proteksi ganda:
+  proxy cookie + `role !== "admin"` redirect di page): tabel + search debounce +
+  Dialog tambah user + Dialog ubah role/reset password/ban + AlertDialog hapus +
+  unban direct, semua via `authClient.admin.*` + RHF/`zodResolver` + `toast`.
+  Nav sidebar + breadcrumb + `<Toaster/>` ditambah. Verifikasi: build lolos,
+  ESLint bersih, list/create/set-role/ban/unban/remove 200, non-admin 307
+  `/dashboard`.
+- [ ] Fase 4b.2 — CRUD posts DB + email beneran (reset/verifikasi).
 - [ ] Fase 5 — i18n?, analytics, web vitals, deploy (Vercel / self-host).
 
 ## 10. Yang BELUM Ada (jangan diasumsikan ada)
 
 - CMS, upload, search, komentar, analytics. Auth/session + proxy + DB MySQL/Prisma
-  SUDAH ada (Fase 4a) — jangan pasang ulang.
-- CRUD users UI di dashboard + CRUD posts DB + email beneran (reset/verifikasi).
+  + CRUD users UI SUDAH ada (Fase 4a–4b.1) — jangan pasang ulang.
+- CRUD posts DB + email beneran (reset/verifikasi).
 - `src/components/ui/*` terisi via CLI (jangan buat manual): `@shadcn` → button,
-  badge, card, separator, sheet, avatar, input, textarea, label; `@magicui` →
+  badge, card, separator, sheet, avatar, input, textarea, label, breadcrumb,
+  collapsible, dropdown-menu, sidebar, skeleton, tooltip, table, dialog,
+  alert-dialog, field, select, alert, spinner, empty, toast; `@magicui` →
   bento-grid, marquee, animated-gradient-text, number-ticker,
   animated-grid-pattern, shimmer-button, particles, meteors. Dep tambahan: `motion`.
   Ikon selalu `lucide-react` (bento-grid sudah di-swap dari radix-icons).
-- Navigasi responsif: `SiteHeader` (SC) + `MobileNav` (client island, Sheet drawer
+- Navigasi publik responsif: `SiteHeader` (SC) + `MobileNav` (client island, Sheet drawer
   dari kanan, active-state via `usePathname`). Desktop nav `hidden md:flex`,
   tombol hamburger `md:hidden`. Jangan jadikan seluruh header client.
+- Navigasi admin: pola docs sidebar resmi — `SidebarProvider` + `AppSidebar`
+  (`variant="inset"` sidebar-08, disederhanakan TANPA Collapsible/DropdownMenu) +
+  `SidebarInset` + `AdminHeader` (trigger + breadcrumb). Menu flat: grup Admin
+  (Overview/Posts/Pengguna/Pengaturan) + grup Situs + kartu user footer (Avatar + Badge
+  role + Button Keluar + spinner pending). Active-state via `usePathname` + prop `isActive`; persistence via cookie
+  `sidebar_state` (dibaca di layout → `defaultOpen`). File registry
+  tidak dioprek (`collapsible.tsx`/`dropdown-menu.tsx` tetap ada tapi tak dipakai
+  nav); adaptasi hanya di `app-sidebar/nav-*/admin-header` + hapus demo
+  `nav-projects`.
 - `next.config.ts` polos (MDX dikompilasi saat render, lihat `src/lib/mdx.ts`).
   `sitemap.ts` memakai tanggal frontmatter asli.

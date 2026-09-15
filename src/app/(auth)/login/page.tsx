@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
 import { LoginForm } from "@/components/login-form";
 
 export const metadata: Metadata = {
@@ -7,7 +10,10 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (session) redirect("/dashboard");
+
   return (
     <div className="space-y-4">
       <div className="space-y-1">
